@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Tabel Periodik Interaktif — dengan Pop-up & Orbit Elektron</title>
+<style>
+  /* ---------- Typography & base ---------- */
+  :root{
+    --bg:#0b1020; --card:#0f1724; --muted:#98a0b3; --accent:#4fc3f7;
+    --tile:78px; --gap:10px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    background: linear-gradient(180deg,#06070a 0%,#0b1020 100%); color:#e6eef8;
+    -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    padding:18px;
+  }
+  h1{margin:0;font-size:20px;font-weight:700}
+  header{display:flex;gap:14px;align-items:center; margin-bottom:12px}
+
+  /* ---------- Controls ---------- */
+  .controls{margin-left:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  input[type="search"], select{
+    background: rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06);
+    padding:10px 12px; border-radius:10px; color:var(--muted); min-width:190px;
+    font-size:14px;
+  }
+  button{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted);padding:10px;border-radius:8px;cursor:pointer}
+  button:hover{border-color:var(--accent);color:white}
+
+  /* ---------- Layout: grid ---------- */
+  main{display:flex;gap:18px}
+  .grid-wrap{flex:1; overflow:auto; padding-bottom:24px}
+  .ptable{
+    display:grid;
+    grid-template-columns: repeat(18, var(--tile));
+    gap:var(--gap);
+    align-items:start;
+    padding:6px;
+  }
+  .tile{
+    width:var(--tile); height:var(--tile); background:var(--card);
+    border-radius:10px; padding:8px; cursor:pointer; display:flex; flex-direction:column;
+    justify-content:space-between; transition:transform .15s, box-shadow .15s, opacity .12s;
+  }
+  .tile:hover{transform:translateY(-6px); box-shadow:0 14px 36px rgba(0,0,0,0.6)}
+  .num{font-size:11px;color:var(--muted)}
+  .sym{font-weight:800;font-size:18px; line-height:1}
+  .ename{font-size:11px;color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+
+  /* ---------- category colors (subtle gradients) ---------- */
+  .cat-alkali{background:linear-gradient(180deg,#2b2a2a,#441313)}
+  .cat-alkaline{background:linear-gradient(180deg,#2b2a22,#13301b)}
+  .cat-lanth{background:linear-gradient(180deg,#1f2430,#133844)}
+  .cat-actin{background:linear-gradient(180deg,#27182a,#3a1436)}
+  .cat-transition{background:linear-gradient(180deg,#172a2a,#16343a)}
+  .cat-metalloid{background:linear-gradient(180deg,#2b2038,#3b2a5a)}
+  .cat-nonmetal{background:linear-gradient(180deg,#21302b,#0f3a2f)}
+  .cat-halogen{background:linear-gradient(180deg,#3a1f24,#4b1220)}
+  .cat-noble{background:linear-gradient(180deg,#1e2338,#10203a)}
+  .cat-post{background:linear-gradient(180deg,#2b2a20,#3a3319)}
+
+  /* ---------- lanthanide / actinide rows ---------- */
+  .subrow{display:flex;gap:var(--gap); margin-top:12px; padding-left:6px}
+
+  /* ---------- Modal ---------- */
+  .modal {
+    display:none; position:fixed; inset:0; z-index:10000;
+    background:rgba(0,0,0,0.6); backdrop-filter: blur(5px);
+    align-items:center; justify-content:center; padding:18px;
+  }
+  .modal.show{display:flex}
+  .modal-card{
+    width:min(860px,98%); max-height:92vh; overflow:auto;
+    background:linear-gradient(180deg,#07101a,#0f1724);
+    border-radius:12px; padding:18px; border:1px solid rgba(255,255,255,0.06);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  }
+  .modal-header{display:flex;align-items:center;gap:12px}
+  .modal-header h2{margin:0;font-size:20px}
+  .close-btn{margin-left:auto; background:transparent; border:none; color:var(--muted); font-size:20px; cursor:pointer}
+  .close-btn:hover{color:white}
+
+  .modal-body{display:grid; grid-template-columns: 1fr 320px; gap:16px; margin-top:12px}
+  .props{font-size:14px; color:var(--muted); line-height:1.5}
+  .props b{color:#e6eef8}
+  .electron-canvas{display:flex;align-items:center;justify-content:center;padding:8px;background:rgba(255,255,255,0.02); border-radius:10px}
+
+  /* responsive */
+  @media (max-width:980px){
+    .modal-body{grid-template-columns:1fr}
+    .electron-canvas{order:-1}
+  }
+
+  footer{margin-top:18px;color:var(--muted);font-size:13px;text-align:center}
+  .legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;color:var(--muted);font-size:13px}
+  .muted{color:var(--muted)}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Tabel Periodik Interaktif</h1>
+
+  <div class="controls">
+    <input type="search" id="search" placeholder="Cari nama, simbol, atau nomor..." aria-label="Cari unsur" />
+    <select id="filterCategory" aria-label="Filter kategori">
+      <option value="all">Semua kategori</option>
+    </select>
+    <select id="filterState" aria-label="Filter wujud">
+      <option value="all">Semua wujud</option>
+      <option value="Solid">Padat</option>
+      <option value="Liquid">Cair</option>
+      <option value="Gas">Gas</option>
+      <option value="Synthetic">Sintetik / Radioaktif</option>
+    </select>
+    <button id="resetFilters">Reset</button>
+  </div>
+</header>
+
+<main>
+  <div class="grid-wrap">
+    <div class="ptable" id="ptable" aria-label="Tabel periodik interaktif"></div>
+
+    <div style="margin-top:14px">
+      <div style="color:var(--muted);font-size:13px;margin-bottom:8px">Baris khusus</div>
+      <div class="subrow" id="lanthRow"></div>
+      <div class="subrow" id="actinRow"></div>
+    </div>
+  </div>
+</main>
+
+<!-- MODAL -->
+<div id="modal" class="modal" role="dialog" aria-modal="true" aria-hidden="true">
+  <div class="modal-card" role="document">
+    <div class="modal-header">
+      <h2 id="modalTitle">Unsur (X)</h2>
+      <button class="close-btn" id="modalClose" aria-label="Tutup">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div>
+        <div class="props" id="modalProps">
+          <!-- filled by JS -->
+        </div>
+
+        <div style="margin-top:12px">
+          <div style="font-weight:700;color:#cfe6ff;margin-bottom:6px">Deskripsi / Fakta</div>
+          <div id="modalFact" style="color:#e6eef8"></div>
+        </div>
+
+        <div class="legend" style="margin-top:12px">
+          <div>Gunakan kotak pencarian dan filter untuk menemukan unsur.</div>
+        </div>
+      </div>
+
+      <div class="electron-canvas" id="electronCanvas" aria-hidden="false" title="Orbit elektron (Bohr-style)">
+        <!-- SVG akan digenerate di sini -->
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div class="muted">Desain edukatif — data ringkasan. Untuk nilai numerik titik leleh/titik didih yang presisi, mintalah update sumber data.</div>
+</footer>
+
+<script>
+/* ----------------------------
+   DATA UNSUR (118) - disederhanakan dari file awal
+   Menambahkan: state, melting (°C), boiling (°C), description, elektron = nomor atom
+   Untuk beberapa nilai numerik saya isi '-' bila tidak tersedia.
+   Anda bisa menambah angka nyata nanti.
+   ---------------------------- */
+
+const ELEMENTS = [
+  {n:1,s:'H',name:'Hidrogen', cat:'Nonmetal', period:1, group:1, m:'1.008', fact:'Gas paling ringan di alam semesta.', state:'Gas', melting:'-259.14', boiling:'-252.87'},
+  {n:2,s:'He',name:'Helium', cat:'Noble gas', period:1, group:18, m:'4.0026', fact:'Gas inert, tak berbau.', state:'Gas', melting:'—', boiling:'-268.93'},
+  {n:3,s:'Li',name:'Litium', cat:'Alkali metal', period:2, group:1, m:'6.94', fact:'Digunakan di baterai isi ulang.', state:'Solid', melting:'180.54', boiling:'1342'},
+  {n:4,s:'Be',name:'Berilium', cat:'Alkaline earth', period:2, group:2, m:'9.0122', fact:'Ringan dan kuat.', state:'Solid', melting:'1278', boiling:'2970'},
+  {n:5,s:'B',name:'Boron', cat:'Metalloid', period:2, group:13, m:'10.81', fact:'Komponen kaca tahan panas.', state:'Solid', melting:'2076', boiling:'4000'},
+  {n:6,s:'C',name:'Karbon', cat:'Nonmetal', period:2, group:14, m:'12.011', fact:'Bentuk alotrop seperti berlian & grafit.', state:'Solid', melting:'—', boiling:'—'},
+  {n:7,s:'N',name:'Nitrogen', cat:'Nonmetal', period:2, group:15, m:'14.007', fact:'Menyusun ~78% atmosfer Bumi.', state:'Gas', melting:'-210.00', boiling:'-195.79'},
+  {n:8,s:'O',name:'Oksigen', cat:'Nonmetal', period:2, group:16, m:'15.999', fact:'Diperlukan untuk respirasi.', state:'Gas', melting:'-218.79', boiling:'-182.96'},
+  {n:9,s:'F',name:'Fluorin', cat:'Halogen', period:2, group:17, m:'18.998', fact:'Sangat reaktif.', state:'Gas', melting:'-219.67', boiling:'-188.11'},
+  {n:10,s:'Ne',name:'Neon', cat:'Noble gas', period:2, group:18, m:'20.180', fact:'Gas pendar.', state:'Gas', melting:'-248.59', boiling:'-246.08'},
+  {n:11,s:'Na',name:'Natrium', cat:'Alkali metal', period:3, group:1, m:'22.990', fact:'Komponen garam meja (NaCl).', state:'Solid', melting:'97.72', boiling:'883'},
+  {n:12,s:'Mg',name:'Magnesium', cat:'Alkaline earth', period:3, group:2, m:'24.305', fact:'Ringan; paduan.', state:'Solid', melting:'650', boiling:'1091'},
+  {n:13,s:'Al',name:'Aluminium', cat:'Post-transition', period:3, group:13, m:'26.982', fact:'Ringan & tahan korosi.', state:'Solid', melting:'660.32', boiling:'2519'},
+  {n:14,s:'Si',name:'Silikon', cat:'Metalloid', period:3, group:14, m:'28.085', fact:'Dasar industri semikonduktor.', state:'Solid', melting:'1414', boiling:'3265'},
+  {n:15,s:'P',name:'Fosfor', cat:'Nonmetal', period:3, group:15, m:'30.974', fact:'Penting untuk pupuk.', state:'Solid', melting:'44.15', boiling:'280.5'},
+  {n:16,s:'S',name:'Belerang', cat:'Nonmetal', period:3, group:16, m:'32.06', fact:'Digunakan dalam pemrosesan kimia.', state:'Solid', melting:'115.21', boiling:'444.6'},
+  {n:17,s:'Cl',name:'Klorin', cat:'Halogen', period:3, group:17, m:'35.45', fact:'Disinfektan.', state:'Gas', melting:'-101.5', boiling:'-34.04'},
+  {n:18,s:'Ar',name:'Argon', cat:'Noble gas', period:3, group:18, m:'39.948', fact:'Melindungi proses pengelasan.', state:'Gas', melting:'-189.34', boiling:'-185.85'},
+  {n:19,s:'K',name:'Kalium', cat:'Alkali metal', period:4, group:1, m:'39.098', fact:'Esensial bagi sel.', state:'Solid', melting:'63.5', boiling:'759'},
+  {n:20,s:'Ca',name:'Kalsium', cat:'Alkaline earth', period:4, group:2, m:'40.078', fact:'Penting untuk tulang.', state:'Solid', melting:'842', boiling:'1484'},
+  {n:21,s:'Sc',name:'Skandium', cat:'Transition', period:4, group:3, m:'44.956', fact:'Paduan khusus.', state:'Solid', melting:'1541', boiling:'2830'},
+  {n:22,s:'Ti',name:'Titanium', cat:'Transition', period:4, group:4, m:'47.867', fact:'Implan medis & aerospace.', state:'Solid', melting:'1668', boiling:'3287'},
+  {n:23,s:'V',name:'Vanadium', cat:'Transition', period:4, group:5, m:'50.942', fact:'Bahan paduan baja.', state:'Solid', melting:'1910', boiling:'3407'},
+  {n:24,s:'Cr',name:'Kromium', cat:'Transition', period:4, group:6, m:'51.996', fact:'Pelapisan krom.', state:'Solid', melting:'1907', boiling:'2672'},
+  {n:25,s:'Mn',name:'Mangan', cat:'Transition', period:4, group:7, m:'54.938', fact:'Dalam baja paduan.', state:'Solid', melting:'1246', boiling:'2061'},
+  {n:26,s:'Fe',name:'Besi', cat:'Transition', period:4, group:8, m:'55.845', fact:'Logam struktural.', state:'Solid', melting:'1538', boiling:'2862'},
+  {n:27,s:'Co',name:'Kobalt', cat:'Transition', period:4, group:9, m:'58.933', fact:'Magnet & baterai.', state:'Solid', melting:'1495', boiling:'2927'},
+  {n:28,s:'Ni',name:'Nikel', cat:'Transition', period:4, group:10, m:'58.693', fact:'Pelapisan & paduan.', state:'Solid', melting:'1455', boiling:'2913'},
+  {n:29,s:'Cu',name:'Tembaga', cat:'Transition', period:4, group:11, m:'63.546', fact:'Konduktor listrik.', state:'Solid', melting:'1084.62', boiling:'2562'},
+  {n:30,s:'Zn',name:'Seng', cat:'Transition', period:4, group:12, m:'65.38', fact:'Galvanisasi.', state:'Solid', melting:'419.5', boiling:'907'},
+  {n:31,s:'Ga',name:'Gallium', cat:'Post-transition', period:4, group:13, m:'69.723', fact:'Meleleh di tangan.', state:'Solid', melting:'29.76', boiling:'2403'},
+  {n:32,s:'Ge',name:'Germanium', cat:'Metalloid', period:4, group:14, m:'72.630', fact:'Detektor infra-merah.', state:'Solid', melting:'938.25', boiling:'2833'},
+  {n:33,s:'As',name:'Arsen', cat:'Metalloid', period:4, group:15, m:'74.922', fact:'Beracun; aplikasi industri.', state:'Solid', melting:'816.8', boiling:'614'},
+  {n:34,s:'Se',name:'Selenium', cat:'Nonmetal', period:4, group:16, m:'78.971', fact:'Elektronik & fotokopi.', state:'Solid', melting:'221', boiling:'684.9'},
+  {n:35,s:'Br',name:'Brom', cat:'Halogen', period:4, group:17, m:'79.904', fact:'Cair pada suhu kamar.', state:'Liquid', melting:'-7.2', boiling:'58.8'},
+  {n:36,s:'Kr',name:'Krypton', cat:'Noble gas', period:4, group:18, m:'83.798', fact:'Lampu flash fotografi.', state:'Gas', melting:'-157.37', boiling:'-153.22'},
+  {n:37,s:'Rb',name:'Rubidium', cat:'Alkali metal', period:5, group:1, m:'85.468', fact:'Sangat reaktif.', state:'Solid', melting:'39.3', boiling:'688'},
+  {n:38,s:'Sr',name:'Strontium', cat:'Alkaline earth', period:5, group:2, m:'87.62', fact:'Warna merah kembang api.', state:'Solid', melting:'777', boiling:'1382'},
+  {n:39,s:'Y',name:'Itrium', cat:'Transition', period:5, group:3, m:'88.906', fact:'Phosphor layar.', state:'Solid', melting:'1526', boiling:'3338'},
+  {n:40,s:'Zr',name:'Zirkonium', cat:'Transition', period:5, group:4, m:'91.224', fact:'Aplikasi nuklir.', state:'Solid', melting:'1855', boiling:'4377'},
+  {n:41,s:'Nb',name:'Niobium', cat:'Transition', period:5, group:5, m:'92.906', fact:'Superkonduktor paduan.', state:'Solid', melting:'2477', boiling:'4744'},
+  {n:42,s:'Mo',name:'Molibdenum', cat:'Transition', period:5, group:6, m:'95.95', fact:'Penguat paduan baja.', state:'Solid', melting:'2623', boiling:'4639'},
+  {n:43,s:'Tc',name:'Teknetium', cat:'Transition', period:5, group:7, m:'98', fact:'Radioaktif; tracer medis.', state:'Synthetic', melting:'—', boiling:'—'},
+  {n:44,s:'Ru',name:'Rutenium', cat:'Transition', period:5, group:8, m:'101.07', fact:'Katalis.', state:'Solid', melting:'2334', boiling:'4150'},
+  {n:45,s:'Rh',name:'Rodium', cat:'Transition', period:5, group:9, m:'102.91', fact:'Katalis otomotif.', state:'Solid', melting:'1964', boiling:'3727'},
+  {n:46,s:'Pd',name:'Palladium', cat:'Transition', period:5, group:10, m:'106.42', fact:'Katalis & perhiasan.', state:'Solid', melting:'1554.9', boiling:'2963'},
+  {n:47,s:'Ag',name:'Perak', cat:'Transition', period:5, group:11, m:'107.87', fact:'Konduktor listrik terbaik setelah emas.', state:'Solid', melting:'961.78', boiling:'2162'},
+  {n:48,s:'Cd',name:'Kadmium', cat:'Transition', period:5, group:12, m:'112.41', fact:'Beracun; baterai NiCd.', state:'Solid', melting:'321.07', boiling:'767'},
+  {n:49,s:'In',name:'Indium', cat:'Post-transition', period:5, group:13, m:'114.82', fact:'Layar sentuh.', state:'Solid', melting:'156.6', boiling:'2072'},
+  {n:50,s:'Sn',name:'Timah', cat:'Post-transition', period:5, group:14, m:'118.71', fact:'Pelapisan & solder.', state:'Solid', melting:'231.93', boiling:'2602'},
+  {n:51,s:'Sb',name:'Antimon', cat:'Post-transition', period:5, group:15, m:'121.76', fact:'Paduan & semikonduktor.', state:'Solid', melting:'630.63', boiling:'1587'},
+  {n:52,s:'Te',name:'Tellurium', cat:'Post-transition', period:5, group:16, m:'127.60', fact:'Paduan termal.', state:'Solid', melting:'449.51', boiling:'988'},
+  {n:53,s:'I',name:'Iodium', cat:'Halogen', period:5, group:17, m:'126.90', fact:'Esensial untuk tiroid.', state:'Solid', melting:'113.7', boiling:'184.3'},
+  {n:54,s:'Xe',name:'Xenon', cat:'Noble gas', period:5, group:18, m:'131.29', fact:'Lampu & beberapa anestesi.', state:'Gas', melting:'-111.8', boiling:'-108.1'},
+  {n:55,s:'Cs',name:'Cesium', cat:'Alkali metal', period:6, group:1, m:'132.91', fact:'Jam atom.', state:'Solid', melting:'28.44', boiling:'671'},
+  {n:56,s:'Ba',name:'Barium', cat:'Alkaline earth', period:6, group:2, m:'137.33', fact:'Digunakan pada kembang api & rontgen.', state:'Solid', melting:'727', boiling:'1870'},
+  {n:57,s:'La',name:'Lantanum', cat:'Lanthanide', period:6, group:null, m:'138.91', fact:'Awal kelompok lantanida.', state:'Solid', melting:'920', boiling:'3464'},
+  {n:58,s:'Ce',name:'Cerium', cat:'Lanthanide', period:6, group:null, m:'140.12', fact:'Katalis & polishing.', state:'Solid', melting:'798', boiling:'3426'},
+  {n:59,s:'Pr',name:'Praseodimium', cat:'Lanthanide', period:6, group:null, m:'140.91', fact:'Magnet & paduan.', state:'Solid', melting:'931', boiling:'3127'},
+  {n:60,s:'Nd',name:'Neodimium', cat:'Lanthanide', period:6, group:null, m:'144.24', fact:'Magnet permanen kuat.', state:'Solid', melting:'1012', boiling:'3074'},
+  {n:61,s:'Pm',name:'Prometium', cat:'Lanthanide', period:6, group:null, m:'145', fact:'Radioaktif & langka.', state:'Synthetic', melting:'—', boiling:'—'},
+  {n:62,s:'Sm',name:'Samarium', cat:'Lanthanide', period:6, group:null, m:'150.36', fact:'Magnet & neutron absorber.', state:'Solid', melting:'1072', boiling:'1900'},
+  {n:63,s:'Eu',name:'Europium', cat:'Lanthanide', period:6, group:null, m:'151.96', fact:'Phosphor layar.', state:'Solid', melting:'822', boiling:'1529'},
+  {n:64,s:'Gd',name:'Gadolinium', cat:'Lanthanide', period:6, group:null, m:'157.25', fact:'Kontras MRI.', state:'Solid', melting:'1313', boiling:'3273'},
+  {n:65,s:'Tb',name:'Terbium', cat:'Lanthanide', period:6, group:null, m:'158.93', fact:'Phosphor & paduan.', state:'Solid', melting:'1629', boiling:'3503'},
+  {n:66,s:'Dy',name:'Disprosium', cat:'Lanthanide', period:6, group:null, m:'162.50', fact:'Magnet & absorber.', state:'Solid', melting:'1407', boiling:'2562'},
+  {n:67,s:'Ho',name:'Holmium', cat:'Lanthanide', period:6, group:null, m:'164.93', fact:'Aplikasi laser.', state:'Solid', melting:'1474', boiling:'2700'},
+  {n:68,s:'Er',name:'Erbium', cat:'Lanthanide', period:6, group:null, m:'167.26', fact:'Penguat serat optik.', state:'Solid', melting:'1529', boiling:'2868'},
+  {n:69,s:'Tm',name:'Tulium', cat:'Lanthanide', period:6, group:null, m:'168.93', fact:'Sangat langka.', state:'Solid', melting:'1545', boiling:'1950'},
+  {n:70,s:'Yb',name:'Ytterbium', cat:'Lanthanide', period:6, group:null, m:'173.05', fact:'Paduan & laser.', state:'Solid', melting:'824', boiling:'1196'},
+  {n:71,s:'Lu',name:'Lutetium', cat:'Lanthanide', period:6, group:null, m:'174.97', fact:'Katalis.', state:'Solid', melting:'1663', boiling:'3402'},
+  {n:72,s:'Hf',name:'Hafnium', cat:'Transition', period:6, group:4, m:'178.49', fact:'Kontrol reaktor & paduan.', state:'Solid', melting:'2233', boiling:'4603'},
+  {n:73,s:'Ta',name:'Tantalum', cat:'Transition', period:6, group:5, m:'180.95', fact:'Kapasitor & implan.', state:'Solid', melting:'3017', boiling:'5458'},
+  {n:74,s:'W',name:'Wolfram', cat:'Transition', period:6, group:6, m:'183.84', fact:'Titik leleh tinggi.', state:'Solid', melting:'3422', boiling:'5555'},
+  {n:75,s:'Re',name:'Rhenium', cat:'Transition', period:6, group:7, m:'186.21', fact:'Paduan suhu tinggi.', state:'Solid', melting:'3180', boiling:'5596'},
+  {n:76,s:'Os',name:'Osmium', cat:'Transition', period:6, group:8, m:'190.23', fact:'Sangat padat.', state:'Solid', melting:'3033', boiling:'5012'},
+  {n:77,s:'Ir',name:'Iridium', cat:'Transition', period:6, group:9, m:'192.22', fact:'Tahan korosi.', state:'Solid', melting:'2446', boiling:'4428'},
+  {n:78,s:'Pt',name:'Platinum', cat:'Transition', period:6, group:10, m:'195.08', fact:'Katalis & perhiasan.', state:'Solid', melting:'1768', boiling:'3825'},
+  {n:79,s:'Au',name:'Emas', cat:'Transition', period:6, group:11, m:'196.97', fact:'Logam mulia & konduktor.', state:'Solid', melting:'1064.18', boiling:'2856'},
+  {n:80,s:'Hg',name:'Merkuri', cat:'Transition', period:6, group:12, m:'200.59', fact:'Cair pada suhu kamar; beracun.', state:'Liquid', melting:'-38.83', boiling:'356.73'},
+  {n:81,s:'Tl',name:'Talium', cat:'Post-transition', period:6, group:13, m:'204.38', fact:'Beracun; elektronik.', state:'Solid', melting:'304', boiling:'1473'},
+  {n:82,s:'Pb',name:'Timbal', cat:'Post-transition', period:6, group:14, m:'207.2', fact:'Beracun; pelindung radiasi.', state:'Solid', melting:'327.5', boiling:'1749'},
+  {n:83,s:'Bi',name:'Bismut', cat:'Post-transition', period:6, group:15, m:'208.98', fact:'Alternatif non-toksik di beberapa aplikasi.', state:'Solid', melting:'271.4', boiling:'1564'},
+  {n:84,s:'Po',name:'Polonium', cat:'Post-transition', period:6, group:16, m:'209', fact:'Radioaktif & beracun.', state:'Synthetic', melting:'254', boiling:'962'},
+  {n:85,s:'At',name:'Astatin', cat:'Halogen', period:6, group:17, m:'210', fact:'Sangat langka & radioaktif.', state:'Synthetic', melting:'—', boiling:'—'},
+  {n:86,s:'Rn',name:'Radon', cat:'Noble gas', period:6, group:18, m:'222', fact:'Gas radioaktif dari peluruhan uranium.', state:'Gas', melting:'-71', boiling:'-61.7'},
+  {n:87,s:'Fr',name:'Fransium', cat:'Alkali metal', period:7, group:1, m:'223', fact:'Sangat radioaktif.', state:'Synthetic', melting:'—', boiling:'—'},
+  {n:88,s:'Ra',name:'Radium', cat:'Alkaline earth', period:7, group:2, m:'226', fact:'Radioaktif; historis medis.', state:'Synthetic', melting:'700', boiling:'1413'},
+  {n:89,s:'Ac',name:'Aktinium', cat:'Actinide', period:7, group:null, m:'227', fact:'Radioaktif; penelitian nuklir.', state:'Synthetic', melting:'1050', boiling:'3200'},
+  {n:90,s:'Th',name:'Torian', cat:'Actinide', period:7, group:null, m:'232.04', fact:'Potensi bahan bakar nuklir.', state:'Solid', melting:'1750', boiling:'4820'},
+  {n:91,s:'Pa',name:'Protaktinium', cat:'Actinide', period:7, group:null, m:'231.04', fact:'Langka dan radioaktif.', state:'Synthetic', melting:'—', boiling:'—'},
+  {n:92,s:'U',name:'Uranium', cat:'Actinide', period:7, group:null, m:'238.03', fact:'Bahan bakar nuklir.', state:'Solid', melting:'1132.2', boiling:'4173'},
+  {n:93,s:'Np',name:'Neptunium', cat:'Actinide', period:7, group:null, m:'237', fact:'Radioaktif, penelitian.', state:'Synthetic', melting:'640', boiling:'3902'},
+  {n:94,s:'Pu',name:'Plutonium', cat:'Actinide', period:7, group:null, m:'244', fact:'Digunakan dalam reaktor & senjata.', state:'Synthetic', melting:'639.4', boiling:'3228'},
+  {n:95,s:'Am',name:'Amerisium', cat:'Actinide', period:7, group:null, m:'243', fact:'Digunakan di detektor asap.', state:'Synthetic', melting:'1176', boiling:'2607'},
+  {n:96,s:'Cm',name:'Kurium', cat:'Actinide', period:7, group:null, m:'247', fact:'Radioaktif; penelitian.', state:'Synthetic', melting:'1340', boiling:'3110'},
+  {n:97,s:'Bk',name:'Berkelium', cat:'Actinide', period:7, group:null, m:'247', fact:'Sintetik & radioaktif.', state:'Synthetic', melting:'—', boiling:'—'},
+  {n:98,s:'Cf',name:'Kalifornium', cat:'Actinide', period:7, group:null, m:'251', fact:'Sumber neutron penelitian.', state:'Synthetic', melting:'900', boiling:'—'},
+  {n:99,s:'Es',name:'Einsteinium', cat:'Actinide', period:7, group:null, m:'252', fact:'Sintetik.', state:'Synthetic', melting:'—', boiling:'—'},
+  {n:100,s:'Fm',name:'Fermium', cat:'Actinide', period:7, group:null, m:'257', fact:'Sintetik.', state:'Synthetic', melting:'—', boiling:'—'},
+  {n:101,s:'Md',name:'Mendelevium', cat:'Actinide', period:7, group:null, m:'258', fact:'Sintetik.', state:'Synthetic', melting:'—', boiling:'—'},
+  {n:102,s:'No',name:'Nobelium', cat:'Actinide', period:7, group:null, m:'259', fact:'Sintetik.', state:'Synthetic', melting:'—', boiling:'—'},
+  {n:103,s:'Lr',name:'Lawrencium', cat:'Actinide', period:7, group:null, m:'266', fact:'Sintetik.', state:'Synthetic', melting:'—', boiling:'—'},
+  {n:104,s:'Rf',name:'Rutherfordium', cat:'Transition', period:7, group:4, m:'267', fact:'Sintetik.', state:'Synthetic', melting:'—', boiling:'—'},
+  {n:105,s:'Db',name:'Dubnium', cat:'Transition', period:7, group:5, m:'268', fact:'Sintetik.', state:'Synthetic', melting:'—', boiling:'—'},
+  {n:106,s:'Sg',name:'Seaborgium', cat:'Transition', period:7, group:6, m:'269', fact:'Sintetik.', state:'Synthetic', melting:'—', boiling:'—'},
+  {n:107,s:'Bh',name:'Bohrium', cat:'Transition', period:7, group:7, m:'270', fact:'Sintetik.', state:'Synthetic', melting:'—', boiling:'—'},
+  {n:108,s:'Hs',name:'Hassium', cat:'Transition', period:7, group:8, m:'269', fact:'Sintetik.', state:'Synthetic', melting:'—', boiling:'—'},
+  {n:109,s:'Mt',name:'Meitnerium', cat:'Transition', period:7, group:9, m:'278', fact:'Sintetik.', state:'Synthetic', melting:'—', boiling:'—'},
+  {n:110,s:'Ds',name:'Darmstadtium', cat:'Transition', period:7, group:10, m:'281', fact:'Sintetik.', state:'Synthetic', melting:'—', boiling:'—'},
+  {n:111,s:'Rg',name:'Roentgenium', cat:'Transition', period:7, group:11, m:'282', fact:'Sintetik.', state:'Synthetic', melting:'—', boiling:'—'},
+  {n:112,s:'Cn',name:'Copernicium', cat:'Transition', period:7, group:12, m:'285', fact:'Sintetik.', state:'Synthetic', melting:'—', boiling:'—'},
+  {n:113,s:'Nh',name:'Nihonium', cat:'Post-transition', period:7, group:13, m:'286', fact:'Sintetik.', state:'Synthetic', melting:'—', boiling:'—'},
+  {n:114,s:'Fl',name:'Flerovium', cat:'Post-transition', period:7, group:14, m:'289', fact:'Sintetik.', state:'Synthetic', melting:'—', boiling:'—'},
+  {n:115,s:'Mc',name:'Moscovium', cat:'Post-transition', period:7, group:15, m:'290', fact:'Sintetik.', state:'Synthetic', melting:'—', boiling:'—'},
+  {n:116,s:'Lv',name:'Livermorium', cat:'Post-transition', period:7, group:16, m:'293', fact:'Sintetik.', state:'Synthetic', melting:'—', boiling:'—'},
+  {n:117,s:'Ts',name:'Tennessine', cat:'Halogen', period:7, group:17, m:'294', fact:'Sintetik.', state:'Synthetic', melting:'—', boiling:'—'},
+  {n:118,s:'Og',name:'Oganesson', cat:'Noble gas', period:7, group:18, m:'294', fact:'Sintetik & sangat tidak stabil.', state:'Synthetic', melting:'—', boiling:'—'}
+];
+
+/* ---------- utilities ---------- */
+function catClass(c){
+  return ({
+    'Alkali metal':'cat-alkali',
+    'Alkaline earth':'cat-alkaline',
+    'Lanthanide':'cat-lanth',
+    'Actinide':'cat-actin',
+    'Transition':'cat-transition',
+    'Metalloid':'cat-metalloid',
+    'Nonmetal':'cat-nonmetal',
+    'Halogen':'cat-halogen',
+    'Noble gas':'cat-noble',
+    'Post-transition':'cat-post'
+  })[c] || '';
+}
+
+/* grid layout - use common visual mapping with blanks */
+const rows = [];
+rows.push([1,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,2]);
+rows.push([3,4,null,null,null,null,null,null,null,null,null,null,5,6,7,8,9,10]);
+rows.push([11,12,null,null,null,null,null,null,null,null,null,null,13,14,15,16,17,18]);
+rows.push([19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36]);
+rows.push([37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54]);
+rows.push([55,56,null,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86]);
+rows.push([87,88,null,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118]);
+
+/* ---------- render table ---------- */
+const ptable = document.getElementById('ptable');
+function renderTable(){
+  ptable.innerHTML = '';
+  rows.forEach(r=>{
+    r.forEach(val=>{
+      if(!val){
+        const gap = document.createElement('div');
+        gap.style.visibility='hidden';
+        ptable.appendChild(gap);
+        return;
+      }
+      const el = ELEMENTS.find(e=>e.n===val);
+      const d = document.createElement('div');
+      d.className = 'tile ' + catClass(el.cat);
+      d.setAttribute('data-n', el.n);
+      d.innerHTML = `<div class="num">${el.n}</div><div class="sym">${el.s}</div><div class="ename">${el.name}</div>`;
+      d.onclick = ()=>openModal(el.n);
+      ptable.appendChild(d);
+    });
+  });
+
+  // lanthanide row
+  const lanth = document.getElementById('lanthRow'); lanth.innerHTML='';
+  for(let i=57;i<=71;i++){
+    const e = ELEMENTS.find(x=>x.n===i);
+    const d = document.createElement('div'); d.className='tile '+catClass(e.cat);
+    d.style.width = 'var(--tile)'; d.innerHTML = `<div class="num">${e.n}</div><div class="sym">${e.s}</div>`;
+    d.onclick = ()=>openModal(e.n); lanth.appendChild(d);
+  }
+  // actinide row
+  const act = document.getElementById('actinRow'); act.innerHTML='';
+  for(let i=89;i<=103;i++){
+    const e = ELEMENTS.find(x=>x.n===i);
+    const d = document.createElement('div'); d.className='tile '+catClass(e.cat);
+    d.style.width = 'var(--tile)'; d.innerHTML = `<div class="num">${e.n}</div><div class="sym">${e.s}</div>`;
+    d.onclick = ()=>openModal(e.n); act.appendChild(d);
+  }
+}
+
+/* ---------- populate filters ---------- */
+const catSet = Array.from(new Set(ELEMENTS.map(e=>e.cat))).sort();
+const filterCategory = document.getElementById('filterCategory');
+catSet.forEach(c=>{
+  const opt = document.createElement('option'); opt.value=c; opt.textContent=c; filterCategory.appendChild(opt);
+});
+
+/* ---------- search & filter logic ---------- */
+const searchInput = document.getElementById('search');
+const filterState = document.getElementById('filterState');
+const resetBtn = document.getElementById('resetFilters');
+
+function applyFilters(){
+  const q = searchInput.value.trim().toLowerCase();
+  const cat = filterCategory.value;
+  const state = filterState.value;
+
+  document.querySelectorAll('.tile').forEach(t=>{
+    const n = Number(t.getAttribute('data-n'));
+    const el = ELEMENTS.find(x=>x.n===n);
+    let visible = true;
+    if(q){
+      if(!(el.name.toLowerCase().includes(q) || el.s.toLowerCase().includes(q) || String(el.n)===q)) visible=false;
+    }
+    if(cat !== 'all' && el.cat !== cat) visible=false;
+    if(state !== 'all' && el.state !== state) visible=false;
+
+    t.style.opacity = visible ? '1' : '0.14';
+    t.style.pointerEvents = visible ? 'auto' : 'none';
+  });
+}
+
+searchInput.addEventListener('input', applyFilters);
+filterCategory.addEventListener('change', applyFilters);
+filterState.addEventListener('change', applyFilters);
+resetBtn.addEventListener('click', ()=>{
+  searchInput.value=''; filterCategory.value='all'; filterState.value='all'; applyFilters();
+});
+
+/* ---------- Modal & electron orbit ---------- */
+const modal = document.getElementById('modal');
+const modalTitle = document.getElementById('modalTitle');
+const modalProps = document.getElementById('modalProps');
+const modalFact = document.getElementById('modalFact');
+const modalClose = document.getElementById('modalClose');
+const electronCanvas = document.getElementById('electronCanvas');
+
+function openModal(n){
+  const el = ELEMENTS.find(x=>x.n===n);
+  if(!el) return;
+  modalTitle.textContent = `${el.name} (${el.s}) — #${el.n}`;
+  modalProps.innerHTML = `
+    <div><b>Kategori:</b> ${el.cat || '-'}</div>
+    <div><b>Wujud (STP):</b> ${el.state || '-'}</div>
+    <div><b>Periode:</b> ${el.period || '-'}</div>
+    <div><b>Golongan:</b> ${el.group || '-'}</div>
+    <div><b>Massa atom (u):</b> ${el.m || '-'}</div>
+    <div><b>Titik leleh (°C):</b> ${el.melting ?? '—'}</div>
+    <div><b>Titik didih (°C):</b> ${el.boiling ?? '—'}</div>
+  `;
+  modalFact.textContent = el.fact || '';
+  generateElectronSVG(el.n); // generate Bohr-like image from number of electrons
+  modal.classList.add('show'); modal.setAttribute('aria-hidden','false');
+  document.body.style.overflow = 'hidden';
+}
+
+modalClose.addEventListener('click', closeModal);
+modal.addEventListener('click', (ev)=>{ if(ev.target === modal) closeModal(); });
+function closeModal(){
+  modal.classList.remove('show'); modal.setAttribute('aria-hidden','true');
+  document.body.style.overflow = '';
+}
+
+/* ---------- generate a Bohr-style electron orbit SVG ---------- */
+/* Simple shell filling algorithm (approximate): capacities per shell: [2,8,18,32,18,8,2]
+   Not a perfect quantum model but useful for visual educational orbit diagram.
+*/
+function electronShells(electrons){
+  const caps = [2,8,18,32,18,8,2];
+  const shells = [];
+  let rem = electrons;
+  for(let i=0;i<caps.length && rem>0;i++){
+    const take = Math.min(caps[i], rem);
+    shells.push(take);
+    rem -= take;
+  }
+  return shells;
+}
+
+function generateElectronSVG(electrons){
+  // build SVG
+  const size = 300;
+  const cx = size/2, cy = size/2;
+  const svgns = 'http://www.w3.org/2000/svg';
+  const shells = electronShells(electrons);
+  const maxR = 120;
+  electronCanvas.innerHTML = '';
+  const svg = document.createElementNS(svgns,'svg');
+  svg.setAttribute('width','100%'); svg.setAttribute('height','100%');
+  svg.setAttribute('viewBox',`0 0 ${size} ${size}`);
+
+  // background circle
+  const bg = document.createElementNS(svgns,'rect');
+  bg.setAttribute('x',0); bg.setAttribute('y',0); bg.setAttribute('width',size); bg.setAttribute('height',size);
+  bg.setAttribute('fill','none');
+  svg.appendChild(bg);
+
+  // nucleus
+  const nuc = document.createElementNS(svgns,'circle');
+  nuc.setAttribute('cx',cx); nuc.setAttribute('cy',cy); nuc.setAttribute('r',12);
+  nuc.setAttribute('fill','#ffd54f'); nuc.setAttribute('stroke','#c68600'); nuc.setAttribute('stroke-width',2);
+  svg.appendChild(nuc);
+
+  // label nucleus with electron count for clarity
+  const nl = document.createElementNS(svgns,'text');
+  nl.setAttribute('x',cx); nl.setAttribute('y',cy+5);
+  nl.setAttribute('text-anchor','middle'); nl.setAttribute('font-size',10); nl.setAttribute('fill','#0b1020');
+  nl.setAttribute('font-weight','700');
+  nl.textContent = electrons;
+  svg.appendChild(nl);
+
+  // draw shells
+  const step = shells.length>0 ? (maxR / shells.length) : 0;
+  shells.forEach((count,i)=>{
+    const r = (i+1) * step;
+    // shell circle
+    const circ = document.createElementNS(svgns,'circle');
+    circ.setAttribute('cx',cx); circ.setAttribute('cy',cy); circ.setAttribute('r',r);
+    circ.setAttribute('fill','none'); circ.setAttribute('stroke','rgba(255,255,255,0.06)'); circ.setAttribute('stroke-width',1.5);
+    svg.appendChild(circ);
+
+    // place electrons evenly on circumference
+    for(let k=0;k<count;k++){
+      const angle = (2*Math.PI/count) * k - Math.PI/2; // start top
+      const ex = cx + r * Math.cos(angle);
+      const ey = cy + r * Math.sin(angle);
+      const el = document.createElementNS(svgns,'circle');
+      el.setAttribute('cx',ex); el.setAttribute('cy',ey); el.setAttribute('r',6);
+      el.setAttribute('fill','#4fc3f7'); el.setAttribute('stroke','#0288d1'); el.setAttribute('stroke-width',1);
+      svg.appendChild(el);
+    }
+  });
+
+  // caption
+  const cap = document.createElementNS(svgns,'text');
+  cap.setAttribute('x',cx); cap.setAttribute('y',size-8);
+  cap.setAttribute('text-anchor','middle'); cap.setAttribute('font-size',11); cap.setAttribute('fill','var(--muted)');
+  cap.textContent = 'Diagram orbit elektron (Bohr-style — ilustratif)';
+  svg.appendChild(cap);
+
+  electronCanvas.appendChild(svg);
+}
+
+/* ---------- init ---------- */
+renderTable();
+applyFilters();
+
+/* accessibility: close modal with ESC */
+window.addEventListener('keydown', (e)=>{
+  if(e.key === 'Escape'){ if(modal.classList.contains('show')) closeModal(); }
+});
+
+/* make tiles keyboard-focusable */
+document.querySelectorAll('.tile').forEach(t=>{ t.tabIndex=0; t.addEventListener('keydown', ev=>{ if(ev.key==='Enter' || ev.key===' ') t.click(); }); });
+</script>
+</body>
+</html>
